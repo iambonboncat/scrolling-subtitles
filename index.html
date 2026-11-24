@@ -6,9 +6,7 @@
     <meta charset="UTF-8">
 
     <!-- iPhone Safari 视口适配 -->
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="mobile-web-app-capable" content="yes">
@@ -372,21 +370,9 @@
 
 <script>
     window.addEventListener('load', function () {
-
-        // 等待字体加载完成
-        if (document.fonts && document.fonts.ready) {
-
-            document.fonts.ready.then(function () {
-                loadComplete();
-            }).catch(function () {
-                loadComplete();
-            });
-
-        } else {
-            // Safari 旧版本兼容
-            loadComplete();
-        }
-
+        // 不等待第三方字体加载
+        // 页面资源加载完成后立即显示开始按钮
+        loadComplete();
     });
 </script>
 
