@@ -160,3 +160,90 @@
          background-position: -200%, 0;
      }
  }
+
+/* 手机浏览器兼容 */
+
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+main {
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+.box {
+    overflow: hidden;
+    background-color: #000;
+    -webkit-transform: translateZ(0);
+}
+
+/* 字幕兼容 */
+.text-box {
+    display: inline-flex;
+    white-space: nowrap;
+
+    -webkit-animation-name: marquee;
+    animation-name: marquee;
+
+    -webkit-animation-timing-function: linear;
+    animation-timing-function: linear;
+
+    -webkit-animation-iteration-count: infinite;
+    animation-iteration-count: infinite;
+
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+
+    will-change: transform;
+}
+
+/* Safari 动画 */
+@-webkit-keyframes marquee {
+    from {
+        -webkit-transform: translateX(100vw);
+    }
+
+    to {
+        -webkit-transform: translateX(-100%);
+    }
+}
+
+@keyframes marquee {
+    from {
+        transform: translateX(100vw);
+    }
+
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+/* 沉浸式播放 */
+body.iphone-playing {
+    overflow: hidden !important;
+    background: #000;
+}
+
+body.iphone-playing .box {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 99999;
+    background: #000;
+    overflow: hidden;
+}
+
+body.iphone-playing .tool-box {
+    display: none !important;
+}
