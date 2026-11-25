@@ -105,7 +105,7 @@ uploadInputEl.addEventListener("change", e => {
     // 限制导入文件大小，避免异常大文件占用内存
     if (file && file.size > 2 * 1024 * 1024) {
         openAlert('文件过大，请选择小于 2MB 的配置文件。');
-        e.target.value = '';
+        uploadInputEl.value = '';
         return;
     }
     if (file === undefined || file === null) {
@@ -120,8 +120,12 @@ uploadInputEl.addEventListener("change", e => {
             openAlert("文件验签解析失败，请上传本系统下载的文件或则不要自行篡改本系统下载的文件，如果不明白可以点击右上角<span style='background-color: rgb(32, 190, 32);'>上传?”</span>、<span style='background-color: rgb(32, 190, 32);'>“下载?”</span>获取帮助说明！");
             return;
         }
+        let safeConfig;
+        try { safeConfig = normalizeImportedConfig(result.value); }
+        catch (err) { openAlert("配置内容无效，无法导入。"); uploadInputEl.value = ''; return; }
         openLoading("文件解析，样式加载中...");
-        handleImportEvent(result.value);
+        handleImportEvent(safeConfig);
+        uploadInputEl.value = ''; 
     }
     fileReader.readAsText(file);
 });
@@ -147,9 +151,9 @@ function handleImportEvent(obj) {
     elArrSynchronizeStyles(1, numberInputBoxElsCssText, numberInputBoxEls, "textContent", obj.surroundTime);
     elArrSynchronizeStyles(2, numberInputBoxElsCssText, numberInputBoxEls, "textContent", obj.fontSize);
     //字体颜色、发光颜色、背景颜色
-    elArrSynchronizeStyles(0, colorInputBoxEvents, colorInputBoxEls, "defaultValue", obj.fontColor, true, "backgroundColor");
-    elArrSynchronizeStyles(1, colorInputBoxEvents, colorInputBoxEls, "defaultValue", obj.glowColor, true, "backgroundColor");
-    elArrSynchronizeStyles(2, colorInputBoxEvents, colorInputBoxEls, "defaultValue", obj.bgColor, true, "backgroundColor");
+    elArrSynchronizeStyles(0, colorInputBoxEvents, colorInputBoxEls, "value", obj.fontColor, true, "backgroundColor");
+    elArrSynchronizeStyles(1, colorInputBoxEvents, colorInputBoxEls, "value", obj.glowColor, true, "backgroundColor");
+    elArrSynchronizeStyles(2, colorInputBoxEvents, colorInputBoxEls, "value", obj.bgColor, true, "backgroundColor");
     //字体粗细
     fontBoldBoxEls[obj.fontBlodIndex].click();
     //环绕颜色
@@ -165,45 +169,63 @@ function elArrSynchronizeStyles(index, styleArr, elArr, key, value, haveFirst = 
     elArr[index].firstElementChild.nextElementSibling[key] = value;
 }
 
-//环绕颜色比较特殊，单独处理，先把颜色全删除,并且恢复currentSurroundCount和surroundBoxBackGroundTextSplitArr的值
-const removeColorInputBoxEls = document.querySelectorAll("#surround-color-box .color-input-box");
+// 环绕颜色导入：使用实时 DOM 查询，确保动态颜色节点也能正确清理。
 function specialTreatmentSurround(surroundExt) {
-    removeColorInputBoxEls.forEach((el, index) => {
-        if (index > 1) {
-            el.remove();
-        }
+    const colors = Array.isArray(surroundExt) ? surroundExt.slice(0, 7) : [];
+    while (colors.length < 2) colors.push(colors.length === 0 ? '#ff0659' : '#45f3ff');
+    document.querySelectorAll('#surround-color-box .color-input-box').forEach((el, index) => {
+        if (index >= 2) el.remove();
     });
     currentSurroundCount = 2;
-    //恢复原值，颜色不重要，比例重要
     surroundBoxBackGroundTextSplitArr = [
-        {
-            a: 0,
-            b: 10,
-            c: 25,
-            value: "#ff0659"
-        },
-        {
-            a: 25,
-            b: 35,
-            c: 50,
-            value: "#45f3ff"
-        }
+        { a: 0, b: 10, c: 25, value: '#ff0659' },
+        { a: 25, b: 35, c: 50, value: '#45f3ff' }
     ];
-    for (let i = 0; i < surroundExt.length - 2; i++) {
-        surroundColorBtnEl.click();
-    }
-    setTimeout(() => {
-        //添加完之后，重新获取
-        document.querySelectorAll("#surround-color-box .color-input-box").forEach((el, index) => {
-            el.firstElementChild.style.backgroundColor = surroundExt[index];
-            //颜色全部修改
-            fixSurroundBoxBackGroundText("xiaomaomi", surroundExt[index], index);
-            //关闭加载
-            setTimeout(() => {
-                closeLoading();
-            }, 1000);
-        });
+    // 添加额外颜色，使用现有控件逻辑注册事件与删除按钮。
+    for (let i = 2; i < colors.length; i++) surroundColorBtnEl.click();
+    const colorEls = document.querySelectorAll('#surround-color-box .color-input-box');
+    colorEls.forEach((el, index) => {
+        const input = el.querySelector('input[type="color"]');
+        const swatch = el.querySelector('.color-box');
+        const color = colors[index];
+        if (!input || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+        input.value = color;
+        input.defaultValue = color;
+        if (swatch) swatch.style.backgroundColor = color;
+        fixSurroundBoxBackGroundText('xiaomaomi', color, index);
     });
+    currentSurroundCount = colorEls.length;
+    surroundColorBtnEl.classList.toggle('disble', currentSurroundCount >= 7);
+    closeLoading();
+}
+
+// 对导入配置做范围校验与归一化，避免损坏数据影响 UI 或产生异常样式。
+function normalizeImportedConfig(value) {
+    if (!value || typeof value !== 'object') throw new Error('配置数据无效');
+    const clamp = (n, min, max, fallback) => Number.isFinite(Number(n)) ? Math.max(min, Math.min(max, Number(n))) : fallback;
+    const color = (v, fallback) => /^#[0-9a-fA-F]{6}$/.test(String(v)) ? String(v) : fallback;
+    const text = String(value.wbnr ?? '').slice(0, 10000);
+    const fontCount = fontStyleBtnEls.length;
+    const modeCount = fontModeBtnEls.length;
+    const weightCount = fontBoldBoxEls.length;
+    const surround = Array.isArray(value.surroundExt) ? value.surroundExt.slice(0, 7).map(v => color(v, '#ff0659')) : ['#ff0659', '#45f3ff'];
+    while (surround.length < 2) surround.push(surround.length === 0 ? '#ff0659' : '#45f3ff');
+    return {
+        ...value,
+        wbnr: text,
+        fontIndex: Math.round(clamp(value.fontIndex, 0, Math.max(fontCount - 1, 0), 0)),
+        moudleIndex: Math.round(clamp(value.moudleIndex, 0, Math.max(modeCount - 1, 0), 0)),
+        fontBlodIndex: Math.round(clamp(value.fontBlodIndex, 0, Math.max(weightCount - 1, 0), 3)),
+        rollStatus: Boolean(value.rollStatus),
+        surroundStatus: Boolean(value.surroundStatus),
+        rollTime: Math.round(clamp(value.rollTime, 1, 120, 10)),
+        surroundTime: Math.round(clamp(value.surroundTime, 1, 120, 5)),
+        fontSize: Math.round(clamp(value.fontSize, 13, 1000, 130)),
+        fontColor: color(value.fontColor, '#ffffff'),
+        glowColor: color(value.glowColor, '#fd2dbf'),
+        bgColor: color(value.bgColor, '#000000'),
+        surroundExt: surround
+    };
 }
 
 /* 自动保存配置：本机浏览器保存，不上传服务器 */
@@ -229,7 +251,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem(AUTO_SAVE_KEY);
         if (saved) {
             const result = checkSign(saved);
-            if (result && result.status && result.value) handleImportEvent(result.value);
+            if (result && result.status && result.value) handleImportEvent(normalizeImportedConfig(result.value));
         }
     } catch (err) { /* 自动恢复失败不阻碍网页启动 */ }
 });

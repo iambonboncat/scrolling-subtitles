@@ -400,3 +400,23 @@ body.playing .box { position: relative; }
     cursor: pointer;
 }
 .surround-color-delete-btn:hover { background: #c9302c; }
+
+/* V3.1 stability/accessibility improvements */
+.v3-play-controls button:focus-visible,
+.v3-play-controls input[type="range"]:focus-visible,
+.surround-color-delete-btn:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+}
+.v3-play-controls input[type="range"] {
+    touch-action: pan-x;
+}
+.v3-play-controls button,
+.surround-color-delete-btn {
+    touch-action: manipulation;
+}
+@media (max-width: 480px) {
+    .v3-play-controls {
+        bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+}
