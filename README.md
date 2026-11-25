@@ -46,7 +46,7 @@
 
 #### 演示网站
 > [https://iambonboncat.github.io/scrolling-subtitles](https://iambonboncat.github.io/scrolling-subtitles)
-> [https://ss.bonboncat.eu.org](https://ss.bonboncat.eu.org)
+
 
 ## V2 优化说明
 
@@ -60,3 +60,14 @@
 - 已对项目 JavaScript 文件进行 Node.js 语法检查。
 
 自动保存仅存储在当前浏览器的 localStorage；清除浏览器数据或换设备后不会同步。
+
+
+## V3 体验升级
+
+- 播放时显示轻量浮动控制栏：暂停/继续、方向反转、速度滑块、隐藏控制栏、退出。
+- 控制栏隐藏后，点击字幕区域可重新显示。
+- 通过屏幕常亮 API 尝试保持设备显示开启（浏览器或系统不支持时会自动降级）。
+- 支持横竖屏变化时调整字幕显示，并保留原有沉浸式/全屏逻辑。
+- 空格键暂停/继续，方向上/下键调节速度，Esc 退出（桌面端）。
+
+部分手机浏览器的屏幕常亮和原生全屏能力受系统限制。

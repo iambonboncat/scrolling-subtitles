@@ -344,3 +344,46 @@
 .switch-box.off .switch-btn-box {
     transform: translateX(-1px);
 }
+/* V3 播放控制浮层 */
+.v3-play-controls {
+    position: fixed;
+    z-index: 100000;
+    left: 50%;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: min(94vw, 560px);
+    padding: 10px;
+    box-sizing: border-box;
+    border-radius: 16px;
+    background: rgba(20, 20, 20, .82);
+    color: #fff;
+    font: 14px/1.2 system-ui, sans-serif;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    user-select: none;
+}
+.v3-play-controls button {
+    min-height: 40px;
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 10px;
+    padding: 8px 13px;
+    color: #fff;
+    background: rgba(255,255,255,.12);
+    font: inherit;
+    touch-action: manipulation;
+}
+.v3-play-controls button:active { background: rgba(255,255,255,.28); }
+.v3-play-controls .v3-speed { display:flex; align-items:center; gap:6px; }
+.v3-play-controls input[type="range"] { width: min(25vw, 120px); accent-color: #20be20; }
+.v3-play-controls.v3-controls-hidden { display:none; }
+body.playing .box { position: relative; }
+@media (max-width: 480px) {
+    .v3-play-controls { gap: 6px; padding: 8px; width: 96vw; }
+    .v3-play-controls button { padding: 7px 10px; min-height: 38px; }
+    .v3-play-controls .v3-speed { font-size: 12px; }
+}

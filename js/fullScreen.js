@@ -1,411 +1,105 @@
-
-/**
- * 手机端全屏字幕控制
- * 支持：iPhone Safari、Android Chrome
- * iPhone 使用网页沉浸式显示作为全屏降级方案
- */
-
+/** V3：沉浸播放、实时控制、方向适配与屏幕常亮 */
 (function () {
     'use strict';
-
     const element = document.querySelector('.box');
     const runBtn = document.querySelector('.run-btn');
     const textBoxEl = document.querySelector('.text-box');
     const rotateBoxEl = document.querySelector('.rotate-box');
+    if (!element || !runBtn || !textBoxEl || !rotateBoxEl) return;
 
-    if (!element || !runBtn || !textBoxEl || !rotateBoxEl) {
-        console.error('字幕播放组件初始化失败');
-        return;
-    }
-
-    let isPlaying = false;
-    let isNativeFullscreen = false;
-    let lastTapTime = 0;
-    let savedScrollY = 0;
-
+    let isPlaying = false, isNativeFullscreen = false, lastTapTime = 0, savedScrollY = 0;
+    let wakeLock = null, reversed = false, paused = false, controlsHidden = false;
     const original = {};
+    const style = document.createElement('style'); document.head.appendChild(style);
 
-    // 保存原始样式
-    function saveOriginal() {
-        original.elementHeight = element.style.height;
-        original.elementPosition = element.style.position;
-        original.elementTop = element.style.top;
-        original.elementLeft = element.style.left;
-        original.elementWidth = element.style.width;
-        original.elementZIndex = element.style.zIndex;
+    const panel = document.createElement('div');
+    panel.className = 'v3-play-controls';
+    panel.innerHTML = '<button type="button" data-action="pause" aria-label="暂停或继续">暂停</button>' +
+      '<button type="button" data-action="reverse" aria-label="切换滚动方向">反向</button>' +
+      '<label class="v3-speed">速度 <input type="range" min="3" max="30" step="1" value="10" aria-label="滚动时间"></label>' +
+      '<button type="button" data-action="hide" aria-label="隐藏控制栏">隐藏</button>' +
+      '<button type="button" data-action="exit" aria-label="退出播放">退出</button>';
+    element.appendChild(panel);
+    const speedInput = panel.querySelector('input');
+    const pauseButton = panel.querySelector('[data-action="pause"]');
 
-        original.fontSize = textBoxEl.style.fontSize;
-        original.transform = textBoxEl.style.transform;
-        original.rotate = rotateBoxEl.style.transform;
-
-        original.bodyPosition = document.body.style.position;
-        original.bodyTop = document.body.style.top;
-        original.bodyWidth = document.body.style.width;
-        original.bodyOverflow = document.body.style.overflow;
-    }
-
-    // 动态创建兼容 Safari 的动画样式
-    const animationStyle = document.createElement('style');
-    document.head.appendChild(animationStyle);
-
-    // 默认滚动动画
-    function resetAnimation() {
-        animationStyle.textContent = `
-            @-webkit-keyframes marquee {
-                0% {
-                    -webkit-transform: translateX(100vw);
-                }
-                100% {
-                    -webkit-transform: translateX(-100%);
-                }
-            }
-
-            @keyframes marquee {
-                0% {
-                    transform: translateX(100vw);
-                    background-position: 0 0;
-                }
-                100% {
-                    transform: translateX(-100%);
-                    background-position: -200% 0;
-                }
-            }
-        `;
-    }
-
-    // 竖屏滚动动画
+    function resetAnimation() { style.textContent = `@keyframes marquee{0%{transform:translateX(100vw)}100%{transform:translateX(-100%)}}`; }
     function modifyAnimation() {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-
-        const offset = Math.ceil((height - width) / 2);
-
-        const start = width + offset + 10;
-        const end = -textBoxEl.offsetWidth - offset - 10;
-
-        animationStyle.textContent = `
-            @-webkit-keyframes marquee {
-                0% {
-                    -webkit-transform: translateX(${start}px);
-                }
-                100% {
-                    -webkit-transform: translateX(${end}px);
-                }
-            }
-
-            @keyframes marquee {
-                0% {
-                    transform: translateX(${start}px);
-                    background-position: 0 0;
-                }
-                100% {
-                    transform: translateX(${end}px);
-                    background-position: -200% 0;
-                }
-            }
-        `;
+        const w=window.innerWidth, h=window.innerHeight, offset=Math.ceil((h-w)/2);
+        const start=w+offset+10, end=-textBoxEl.offsetWidth-offset-10;
+        style.textContent=`@keyframes marquee{0%{transform:translateX(${start}px)}100%{transform:translateX(${end}px)}}`;
     }
-
-    // 判断屏幕方向
     function checkOrientation() {
         if (!isPlaying) return;
-
-        const isPortrait =
-            window.innerHeight > window.innerWidth;
-
-        if (isPortrait) {
-
-            if (textBoxEl.hasAttribute('xiaomaomi-roll')) {
-                const differenceValue =
-                    window.innerWidth +
-                    Math.ceil(
-                        (window.innerHeight - window.innerWidth) / 2
-                    ) + 10;
-
-                textBoxEl.style.transform =
-                    `translateX(${differenceValue}px)`;
-            }
-
-            rotateBoxEl.style.transform = 'rotateZ(90deg)';
-
-            modifyAnimation();
-
-        } else {
-
-            rotateBoxEl.style.transform = '';
-
-            resetAnimation();
-
-            if (textBoxEl.hasAttribute('xiaomaomi-roll')) {
-                textBoxEl.style.transform = 'translateX(100vw)';
-            }
-        }
+        const portrait=window.innerHeight>window.innerWidth;
+        if (portrait) {
+            rotateBoxEl.style.transform='rotateZ(90deg)'; modifyAnimation();
+            if(textBoxEl.hasAttribute('xiaomaomi-roll')) textBoxEl.style.transform=`translateX(${window.innerWidth+Math.ceil((window.innerHeight-window.innerWidth)/2)+10}px)`;
+        } else { rotateBoxEl.style.transform=''; resetAnimation(); if(textBoxEl.hasAttribute('xiaomaomi-roll')) textBoxEl.style.transform='translateX(100vw)'; }
     }
-
-    // iPhone 网页沉浸式模式
-    function enterMobileFullscreen() {
-
-        savedScrollY = window.scrollY;
-
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${savedScrollY}px`;
-        document.body.style.width = '100%';
-        document.body.style.overflow = 'hidden';
-
-        element.style.position = 'fixed';
-        element.style.top = '0';
-        element.style.left = '0';
-        element.style.width = '100vw';
-        element.style.height = '100vh';
-        element.style.zIndex = '99999';
-
+    function saveOriginal(){
+        ['height','position','top','left','width','zIndex'].forEach(k=>original['element'+k]=element.style[k]);
+        original.fontSize=textBoxEl.style.fontSize; original.transform=textBoxEl.style.transform; original.rotate=rotateBoxEl.style.transform;
+        ['position','top','width','overflow'].forEach(k=>original['body'+k]=document.body.style[k]);
+        original.animationDuration=textBoxEl.style.animationDuration; original.animationDirection=textBoxEl.style.animationDirection;
+    }
+    function enterFallback(){
+        savedScrollY=window.scrollY; document.body.style.position='fixed'; document.body.style.top=`-${savedScrollY}px`; document.body.style.width='100%'; document.body.style.overflow='hidden';
+        element.style.position='fixed'; element.style.top='0'; element.style.left='0'; element.style.width='100vw'; element.style.height='100vh'; element.style.zIndex='99999';
         document.body.classList.add('iphone-playing');
     }
-
-    // 恢复页面
-    function restoreMobileFullscreen() {
-
+    function restoreFallback(){
         document.body.classList.remove('iphone-playing');
-
-        document.body.style.position = original.bodyPosition;
-        document.body.style.top = original.bodyTop;
-        document.body.style.width = original.bodyWidth;
-        document.body.style.overflow = original.bodyOverflow;
-
-        element.style.position = original.elementPosition;
-        element.style.top = original.elementTop;
-        element.style.left = original.elementLeft;
-        element.style.width = original.elementWidth;
-        element.style.height = original.elementHeight;
-        element.style.zIndex = original.elementZIndex;
-
-        window.scrollTo(0, savedScrollY);
+        ['position','top','width','overflow'].forEach(k=>document.body.style[k]=original['body'+k]);
+        ['height','position','top','left','width','zIndex'].forEach(k=>element.style[k]=original['element'+k]);
+        window.scrollTo(0,savedScrollY);
     }
-
-    // 开始播放
-    async function startPlay() {
-
-        if (isPlaying) return;
-
-        isPlaying = true;
-
-        saveOriginal();
-
-        // 计算字体放大比例
-        const baseFontSize =
-            parseFloat(textBoxEl.style.fontSize) || 130;
-
-        const ratio =
-            document.documentElement.clientWidth /
-            Math.max(element.clientHeight, 1);
-
-        const scale = ratio > 5 ? ratio - 2.8 : ratio;
-
-        textBoxEl.style.fontSize =
-            Math.floor(baseFontSize * Math.max(1, scale)) + 'px';
-
-        element.style.height = '100vh';
-
-        // 先更新布局
-        void element.offsetWidth;
-
-        // 优先尝试浏览器原生全屏
-        const requestFullscreen =
-            element.requestFullscreen ||
-            element.webkitRequestFullscreen;
-
-        if (
-            requestFullscreen &&
-            document.fullscreenEnabled !== false
-        ) {
-            try {
-
-                const result = requestFullscreen.call(element);
-
-                if (result && typeof result.then === 'function') {
-                    await result;
-                }
-
-                isNativeFullscreen =
-                    document.fullscreenElement === element ||
-                    document.webkitFullscreenElement === element;
-
-            } catch (error) {
-
-                console.log('原生全屏不可用，切换沉浸模式', error);
-
-                isNativeFullscreen = false;
-            }
-        }
-
-        // 不支持原生全屏时使用手机兼容方案
-        if (!isNativeFullscreen) {
-            enterMobileFullscreen();
-        }
-
-        // 适配屏幕
-        checkOrientation();
-
-        // 重新计算动画
-        void textBoxEl.offsetWidth;
+    async function requestWakeLock(){
+        try { if('wakeLock' in navigator && isPlaying) wakeLock=await navigator.wakeLock.request('screen'); }
+        catch(e){ console.info('屏幕常亮不可用或被系统拒绝',e); }
     }
-
-    // 退出播放
-    async function stopPlay() {
-
-        if (!isPlaying) return;
-
-        isPlaying = false;
-
-        if (isNativeFullscreen) {
-
-            const exitFullscreen =
-                document.exitFullscreen ||
-                document.webkitExitFullscreen;
-
-            if (exitFullscreen) {
-                try {
-                    const result = exitFullscreen.call(document);
-
-                    if (result && typeof result.then === 'function') {
-                        await result;
-                    }
-                } catch (error) {
-                    console.log('退出全屏失败', error);
-                }
-            }
-        }
-
-        // 恢复页面
-        if (!isNativeFullscreen) {
-            restoreMobileFullscreen();
-        }
-
-        resetFun();
+    async function releaseWakeLock(){ try{ if(wakeLock){await wakeLock.release(); wakeLock=null;} }catch(e){} }
+    function setPaused(value){ paused=value; textBoxEl.style.animationPlayState=value?'paused':'running'; pauseButton.textContent=value?'继续':'暂停'; }
+    function setSpeed(value){ const seconds=Number(value); if(seconds>0) textBoxEl.style.animationDuration=seconds+'s'; }
+    function setDirection(){ textBoxEl.style.animationDirection=reversed?'reverse':'normal'; panel.querySelector('[data-action="reverse"]').textContent=reversed?'正向':'反向'; }
+    function showPanel(){ panel.classList.remove('v3-controls-hidden'); controlsHidden=false; }
+    function togglePanel(){ controlsHidden=!controlsHidden; panel.classList.toggle('v3-controls-hidden',controlsHidden); }
+    async function startPlay(){
+        if(isPlaying)return; isPlaying=true; saveOriginal(); document.body.classList.add('playing');
+        const base=parseFloat(textBoxEl.style.fontSize)||130; const ratio=document.documentElement.clientWidth/Math.max(element.clientHeight,1); const scale=ratio>5?ratio-2.8:ratio;
+        textBoxEl.style.fontSize=Math.floor(base*Math.max(1,scale))+'px'; element.style.height='100vh'; void element.offsetWidth;
+        const req=element.requestFullscreen||element.webkitRequestFullscreen;
+        if(req&&document.fullscreenEnabled!==false){try{const r=req.call(element);if(r&&r.then)await r;isNativeFullscreen=document.fullscreenElement===element||document.webkitFullscreenElement===element;}catch(e){isNativeFullscreen=false;}}
+        if(!isNativeFullscreen) enterFallback();
+        checkOrientation(); void textBoxEl.offsetWidth;
+        speedInput.value=String(Math.max(3,Math.min(30,parseFloat(getComputedStyle(textBoxEl).animationDuration)||10)));
+        setPaused(false); reversed=false; setDirection(); showPanel(); await requestWakeLock();
     }
-
-    // 恢复字幕样式
-    function resetFun() {
-
-        rotateBoxEl.style.transform = original.rotate;
-
-        textBoxEl.style.fontSize = original.fontSize;
-        textBoxEl.style.transform = original.transform;
-
-        element.style.height = original.elementHeight;
-
-        isNativeFullscreen = false;
-
-        resetAnimation();
-
-        // 滚动字幕恢复初始位置
-        if (textBoxEl.hasAttribute('xiaomaomi-roll')) {
-            textBoxEl.style.transform = 'translateX(100vw)';
-        } else {
-            textBoxEl.style.transform = 'translateX(0vw)';
-        }
+    async function stopPlay(){
+        if(!isPlaying)return; isPlaying=false; document.body.classList.remove('playing'); await releaseWakeLock();
+        if(isNativeFullscreen){const exit=document.exitFullscreen||document.webkitExitFullscreen;if(exit){try{const r=exit.call(document);if(r&&r.then)await r;}catch(e){}}}
+        if(!isNativeFullscreen)restoreFallback(); resetFun();
     }
-
-    // 播放按钮
-    runBtn.addEventListener('click', function (event) {
-
-        event.preventDefault();
-
-        startPlay();
-
-    });
-
-    // 监听原生全屏退出
-    function handleFullscreenChange() {
-
-        const fullscreenElement =
-            document.fullscreenElement ||
-            document.webkitFullscreenElement;
-
-        if (
-            isPlaying &&
-            isNativeFullscreen &&
-            !fullscreenElement
-        ) {
-
-            restoreMobileFullscreen();
-            resetFun();
-            isPlaying = false;
-        }
+    function resetFun(){
+        rotateBoxEl.style.transform=original.rotate||''; textBoxEl.style.fontSize=original.fontSize||''; textBoxEl.style.transform=original.transform||'';
+        textBoxEl.style.animationDuration=original.animationDuration||''; textBoxEl.style.animationDirection=original.animationDirection||''; textBoxEl.style.animationPlayState=''; element.style.height=original.elementheight||'';
+        isNativeFullscreen=false; reversed=false; paused=false; controlsHidden=false; panel.classList.remove('v3-controls-hidden'); panel.style.display=''; resetAnimation();
+        if(textBoxEl.hasAttribute('xiaomaomi-roll'))textBoxEl.style.transform='translateX(100vw)';else textBoxEl.style.transform='translateX(0vw)';
     }
-
-    document.addEventListener(
-        'fullscreenchange',
-        handleFullscreenChange
-    );
-
-    document.addEventListener(
-        'webkitfullscreenchange',
-        handleFullscreenChange
-    );
-
-    // 全屏失败时不清空网页
-    element.addEventListener('fullscreenerror', function () {
-        console.log('浏览器全屏失败，使用兼容显示模式');
-
-        if (isPlaying && !isNativeFullscreen) {
-            enterMobileFullscreen();
-        }
+    runBtn.addEventListener('click',e=>{e.preventDefault();startPlay();});
+    panel.addEventListener('click',e=>{const action=e.target.closest('button')?.dataset.action;if(!action)return;e.stopPropagation();
+        if(action==='pause')setPaused(!paused); if(action==='reverse'){reversed=!reversed;setDirection();} if(action==='hide')togglePanel(); if(action==='exit')stopPlay();
     });
-
-    // 双击退出
-    function handleDoubleTap() {
-
-        const now = Date.now();
-
-        if (now - lastTapTime < 350 && isPlaying) {
-            stopPlay();
-        }
-
-        lastTapTime = now;
-    }
-
-    element.addEventListener(
-        'touchend',
-        handleDoubleTap,
-        { passive: true }
-    );
-
-    element.addEventListener('dblclick', function () {
-        stopPlay();
-    });
-
-    // 横竖屏变化
-    window.addEventListener('resize', function () {
-
-        if (isPlaying) {
-
-            if (!isNativeFullscreen) {
-                element.style.height = '100vh';
-            }
-
-            checkOrientation();
-        }
-    });
-
-    window.addEventListener('orientationchange', function () {
-
-        if (isPlaying) {
-            setTimeout(checkOrientation, 300);
-        }
-    });
-
-    // ESC 退出
-    document.addEventListener('keydown', function (event) {
-
-        if (event.key === 'Escape' && isPlaying) {
-            stopPlay();
-        }
-    });
-
-    // 初始化
-    resetAnimation();
-
-    textBoxEl.style.fontSize = '130px';
-
+    speedInput.addEventListener('input',()=>setSpeed(speedInput.value));
+    element.addEventListener('click',e=>{if(!isPlaying)return;if(e.target.closest('.v3-play-controls'))return;if(controlsHidden)showPanel();});
+    function handleFullscreenChange(){const fs=document.fullscreenElement||document.webkitFullscreenElement;if(isPlaying&&isNativeFullscreen&&!fs){isPlaying=false;document.body.classList.remove('playing');releaseWakeLock();restoreFallback();resetFun();}}
+    document.addEventListener('fullscreenchange',handleFullscreenChange);document.addEventListener('webkitfullscreenchange',handleFullscreenChange);
+    element.addEventListener('fullscreenerror',()=>{if(isPlaying&&!isNativeFullscreen)enterFallback();});
+    element.addEventListener('touchend',()=>{const now=Date.now();if(now-lastTapTime<350&&isPlaying)stopPlay();lastTapTime=now;},{passive:true});
+    element.addEventListener('dblclick',()=>stopPlay());
+    window.addEventListener('resize',()=>{if(isPlaying){if(!isNativeFullscreen)element.style.height='100vh';checkOrientation();}});
+    window.addEventListener('orientationchange',()=>{if(isPlaying)setTimeout(checkOrientation,300);});
+    document.addEventListener('keydown',e=>{if(!isPlaying)return;if(e.key==='Escape')stopPlay();if(e.code==='Space'&&!e.target.closest('input')){e.preventDefault();setPaused(!paused);}if(e.key==='ArrowUp'){speedInput.value=String(Math.max(3,Number(speedInput.value)-1));setSpeed(speedInput.value);}if(e.key==='ArrowDown'){speedInput.value=String(Math.min(30,Number(speedInput.value)+1));setSpeed(speedInput.value);}});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&isPlaying)requestWakeLock();});
+    resetAnimation(); textBoxEl.style.fontSize='130px';
 })();
