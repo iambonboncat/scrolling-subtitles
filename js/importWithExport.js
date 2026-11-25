@@ -4,7 +4,7 @@ const uploadInputEl = uploadBtnEl.previousElementSibling;
 const dpwnloadBtnEl = document.querySelector('#download-btn');
 
 //下载
-function downloadFun() {
+function getCurrentConfig() {
     let wbnr = textInputEl.value;
     let fontIndex = 0;
     const els = document.querySelectorAll('#font-module-box .small-module-box');
@@ -84,6 +84,11 @@ function downloadFun() {
         surroundExt
     };
     obj.sign = xiaomaomiSign.call(l, obj);
+    return obj;
+}
+
+function downloadFun() {
+    const obj = getCurrentConfig();
     downloadFile(URL.createObjectURL(new Blob([xiaomaomiEncode(obj)], { type: 'text/plain' })), "在线手持弹幕样式保存文件");
 }
 
@@ -97,12 +102,20 @@ uploadBtnEl.addEventListener('click', () => {
 });
 uploadInputEl.addEventListener("change", e => {
     const file = e.target.files[0];
+    // 限制导入文件大小，避免异常大文件占用内存
+    if (file && file.size > 2 * 1024 * 1024) {
+        openAlert('文件过大，请选择小于 2MB 的配置文件。');
+        e.target.value = '';
+        return;
+    }
     if (file === undefined || file === null) {
         return;
     }
     const fileReader = new FileReader();
     fileReader.onload = e => {
-        const result = checkSign(e.target.result);
+        let result;
+        try { result = checkSign(e.target.result); }
+        catch (err) { openAlert('配置文件解析失败，请检查文件格式。'); return; }
         if (!result.status) {
             openAlert("文件验签解析失败，请上传本系统下载的文件或则不要自行篡改本系统下载的文件，如果不明白可以点击右上角<span style='background-color: rgb(32, 190, 32);'>上传?”</span>、<span style='background-color: rgb(32, 190, 32);'>“下载?”</span>获取帮助说明！");
             return;
@@ -192,3 +205,31 @@ function specialTreatmentSurround(surroundExt) {
         });
     });
 }
+
+/* 自动保存配置：本机浏览器保存，不上传服务器 */
+const AUTO_SAVE_KEY = 'scrolling-subtitles-autosave-v1';
+let autoSaveTimer;
+function saveDraftConfig() {
+    try {
+        const config = getCurrentConfig();
+        localStorage.setItem(AUTO_SAVE_KEY, xiaomaomiEncode(config));
+    } catch (err) { /* 浏览器禁用存储时静默降级 */ }
+}
+function scheduleDraftSave() {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(saveDraftConfig, 400);
+}
+['input', 'change', 'click'].forEach(type => {
+    document.addEventListener(type, event => {
+        if (event.target.closest('#main, #custom-module-box, #font-module-box, #font-mode-box, #font-bold-box')) scheduleDraftSave();
+    }, true);
+});
+window.addEventListener('DOMContentLoaded', () => {
+    try {
+        const saved = localStorage.getItem(AUTO_SAVE_KEY);
+        if (saved) {
+            const result = checkSign(saved);
+            if (result && result.status && result.value) handleImportEvent(result.value);
+        }
+    } catch (err) { /* 自动恢复失败不阻碍网页启动 */ }
+});

@@ -37,13 +37,13 @@ function getRandomHexColor() {
 
 //下载文件
 function downloadFile(url, name = "下载") {
-    console.log('====================================');
-    console.log(url);
-    console.log('====================================');
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => document.body.removeChild(a));
+    setTimeout(() => {
+        if (a.parentNode) a.parentNode.removeChild(a);
+        if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+    }, 1000);
 }

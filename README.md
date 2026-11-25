@@ -46,3 +46,17 @@
 
 #### 演示网站
 > [https://iambonboncat.github.io/scrolling-subtitles](https://iambonboncat.github.io/scrolling-subtitles)
+
+
+## V2 优化说明
+
+本分支在原项目基础上进行了轻量增强，尽量保留原有页面和交互：
+
+- 字幕内容通过 DOM 节点和 `textContent` 生成，避免把用户输入作为 HTML 解析。
+- 保留输入中的空格。
+- 配置在浏览器本地自动保存并尝试在下次打开时恢复（不上传服务器）。
+- 上传配置文件限制为 2MB，并对解析异常进行提示。
+- 下载文件后延迟清理 Blob URL，减少临时资源泄漏。
+- 已对项目 JavaScript 文件进行 Node.js 语法检查。
+
+自动保存仅存储在当前浏览器的 localStorage；清除浏览器数据或换设备后不会同步。
