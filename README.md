@@ -46,7 +46,7 @@
 
 #### 演示网站
 > [https://iambonboncat.github.io/scrolling-subtitles](https://iambonboncat.github.io/scrolling-subtitles)
-
+> [https://ss.bonboncat.eu.org](https://ss.bonboncat.eu.org)
 
 ## V2 优化说明
 
