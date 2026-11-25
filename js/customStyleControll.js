@@ -196,30 +196,61 @@ const surroundColorBoxEls = document.querySelectorAll('#surround-color-box .colo
 const surroundColorBtnEl = document.querySelector("#surround-color-box > .input-btn");
 const surroundSwitchBox = document.querySelector('#surround-switch > .switch-box');
 
-//统一处理事件
-function allHandelColorSelectEvent(el, index, isRestartComput = false) {
+// 统一处理环绕颜色事件。保留默认2色，新增颜色可删除。
+function reflowSurroundColorSegments() {
+    const count = surroundBoxBackGroundTextSplitArr.length;
+    const transparentTotal = 20;
+    const colorTotal = 30;
+    const transparentOne = transparentTotal / count;
+    const colorOne = colorTotal / count;
+    let cursor = 0;
+    surroundBoxBackGroundTextSplitArr.forEach((obj, index) => {
+        obj.a = cursor;
+        obj.b = obj.a + transparentOne;
+        obj.c = obj.b + colorOne;
+        cursor = obj.c;
+        if (index === count - 1) obj.c = 50;
+    });
+    mergeColorSplitArr();
+}
+
+function allHandelColorSelectEvent(el, isRestartComput = false) {
     const colorBox = el.firstElementChild;
     const colorInput = colorBox.nextElementSibling;
     const inputBtn = colorInput.nextElementSibling;
-    if (isRestartComput) {
-        fixSurroundBoxBackGroundText("add", colorInput.value);
-    }
+    if (isRestartComput) fixSurroundBoxBackGroundText("add", colorInput.value);
     colorInput.addEventListener('change', e => {
         colorBox.style.backgroundColor = e.target.value;
-        //改变全部在这里触发
-        fixSurroundBoxBackGroundText("xiaomaomi", e.target.value, index);
+        const index = Array.from(surroundColorBoxEl.querySelectorAll('.color-input-box')).indexOf(el);
+        if (index >= 0) fixSurroundBoxBackGroundText("xiaomaomi", e.target.value, index);
     });
-    inputBtn.addEventListener('click', () => {
-        colorInput.click();
-    });
+    inputBtn.addEventListener('click', () => colorInput.click());
+
+    // 前2个默认颜色不可删除；新增颜色提供删除按钮
+    if (Array.from(surroundColorBoxEl.querySelectorAll('.color-input-box')).indexOf(el) >= 2) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'surround-color-delete-btn';
+        deleteBtn.textContent = '删除';
+        deleteBtn.title = '删除此环绕颜色';
+        deleteBtn.addEventListener('click', () => {
+            const items = Array.from(surroundColorBoxEl.querySelectorAll('.color-input-box'));
+            const index = items.indexOf(el);
+            if (index < 2) return;
+            el.remove();
+            surroundBoxBackGroundTextSplitArr.splice(index, 1);
+            currentSurroundCount = surroundColorBoxEl.querySelectorAll('.color-input-box').length;
+            surroundColorBtnEl.classList.toggle('disble', currentSurroundCount >= 7);
+            reflowSurroundColorSegments();
+        });
+        el.appendChild(deleteBtn);
+    }
 }
 
-//初始的两个
-surroundColorBoxEls.forEach((el, index) => {
-    allHandelColorSelectEvent(el, index);
-});
+// 初始颜色
+surroundColorBoxEls.forEach(el => allHandelColorSelectEvent(el));
 
-//添加组件,默认就有两个
+// 添加组件，默认已有两个
 let currentSurroundCount = 2;
 surroundColorBtnEl.addEventListener('click', () => {
     if (currentSurroundCount >= 7) {
@@ -231,23 +262,20 @@ surroundColorBtnEl.addEventListener('click', () => {
     colorInputBox.className = 'color-input-box';
     const colorBox = document.createElement('div');
     colorBox.className = 'color-box';
-    colorBox.setAttribute("style", "background-color: " + randomColor + ";");
+    colorBox.style.backgroundColor = randomColor;
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.defaultValue = randomColor;
+    colorInput.value = randomColor;
     colorInput.style.display = 'none';
     const inputBtn = document.createElement('div');
     inputBtn.className = 'input-btn';
     inputBtn.innerText = '选择颜色';
-    colorInputBox.appendChild(colorBox);
-    colorInputBox.appendChild(colorInput);
-    colorInputBox.appendChild(inputBtn);
-    allHandelColorSelectEvent(colorInputBox, currentSurroundCount++, true);
+    colorInputBox.append(colorBox, colorInput, inputBtn);
     surroundColorBoxEl.insertBefore(colorInputBox, surroundColorBtnEl);
-    if (currentSurroundCount >= 7) {
-        //添加禁用标记
-        surroundColorBtnEl.classList.add("disble");
-    }
+    allHandelColorSelectEvent(colorInputBox, true);
+    currentSurroundCount = surroundColorBoxEl.querySelectorAll('.color-input-box').length;
+    surroundColorBtnEl.classList.toggle('disble', currentSurroundCount >= 7);
 });
 
 //颜色分化--数组对象控制样式

@@ -387,3 +387,16 @@ body.playing .box { position: relative; }
     .v3-play-controls button { padding: 7px 10px; min-height: 38px; }
     .v3-play-controls .v3-speed { font-size: 12px; }
 }
+
+/* 环绕颜色删除按钮 */
+.surround-color-delete-btn {
+    margin-left: 6px;
+    padding: 3px 8px;
+    border: 1px solid #d9534f;
+    border-radius: 4px;
+    background: #d9534f;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+}
+.surround-color-delete-btn:hover { background: #c9302c; }
